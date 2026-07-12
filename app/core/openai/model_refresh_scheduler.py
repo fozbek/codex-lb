@@ -4,8 +4,9 @@ import asyncio
 import contextlib
 import importlib
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Protocol, cast
+from typing import Protocol, TypeVar, cast
 
 from app.core.auth.refresh import RefreshError
 from app.core.clients.http import refresh_http_client
@@ -28,8 +29,11 @@ from app.modules.proxy.account_cache import get_account_selection_cache
 logger = logging.getLogger(__name__)
 
 
+_T = TypeVar("_T")
+
+
 class _LeaderElectionLike(Protocol):
-    async def try_acquire(self) -> bool: ...
+    async def run_if_leader(self, fn: Callable[[], Awaitable[_T]]) -> _T | None: ...
 
 
 @dataclass(slots=True)
@@ -81,9 +85,9 @@ class ModelRefreshScheduler:
                 continue
 
     async def _refresh_once(self) -> None:
-        is_leader = await _get_leader_election().try_acquire()
-        if not is_leader:
-            return
+        await _get_leader_election().run_if_leader(self._refresh_as_leader)
+
+    async def _refresh_as_leader(self) -> None:
         try:
             async with get_background_session() as session:
                 accounts_repo = AccountsRepository(session)

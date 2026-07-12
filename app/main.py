@@ -40,6 +40,7 @@ from app.core.openai.model_refresh_scheduler import build_model_refresh_schedule
 from app.core.resilience.backpressure import BackpressureMiddleware
 from app.core.resilience.bulkhead import BulkheadMiddleware, get_bulkhead
 from app.core.resilience.memory_monitor import configure as configure_memory_monitor
+from app.core.scheduling.leader_election import get_leader_election
 from app.core.usage.refresh_scheduler import build_usage_refresh_scheduler
 from app.core.usage.reset_credits_refresh_scheduler import build_rate_limit_reset_credits_scheduler
 from app.db.session import SessionLocal, close_db, close_session, init_background_db, init_db
@@ -329,6 +330,13 @@ async def lifespan(app: FastAPI):
         await api_key_limit_reset_scheduler.stop()
         await usage_scheduler.stop()
         await rate_limit_reset_credits_scheduler.stop()
+        # Release the scheduler leader lease only after every leader-gated
+        # scheduler has stopped so no local tick re-acquires it; followers can
+        # then take over immediately instead of waiting out the lease TTL.
+        try:
+            await asyncio.wait_for(get_leader_election().release(), timeout=3)
+        except Exception:
+            logger.warning("Failed to release scheduler leader lease during shutdown", exc_info=True)
         try:
             await close_http_client()
         finally:
