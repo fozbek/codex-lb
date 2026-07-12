@@ -252,14 +252,19 @@ async def lifespan(app: FastAPI):
     from app.core.cache.invalidation import (
         NAMESPACE_API_KEY,
         NAMESPACE_FIREWALL,
+        NAMESPACE_RESET_CREDITS,
         CacheInvalidationPoller,
         set_cache_invalidation_poller,
     )
     from app.core.middleware.firewall_cache import get_firewall_ip_cache
+    from app.modules.rate_limit_reset_credits.store import get_rate_limit_reset_credits_store
 
     cache_poller = CacheInvalidationPoller(SessionLocal)
     cache_poller.on_invalidation(NAMESPACE_API_KEY, get_api_key_cache().clear)
     cache_poller.on_invalidation(NAMESPACE_FIREWALL, get_firewall_ip_cache().invalidate_all)
+    # The bus carries no payload, so a peer redeem clears this replica's whole
+    # reset-credits store; the refresh scheduler repopulates it on its next tick.
+    cache_poller.on_invalidation(NAMESPACE_RESET_CREDITS, get_rate_limit_reset_credits_store().invalidate)
     set_cache_invalidation_poller(cache_poller)
     await cache_poller.start()
 

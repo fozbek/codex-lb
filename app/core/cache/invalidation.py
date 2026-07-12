@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 NAMESPACE_API_KEY = "api_key"
 NAMESPACE_FIREWALL = "firewall"
+NAMESPACE_RESET_CREDITS = "reset_credits"
 type InvalidationCallback = Callable[[], None | Awaitable[None]]
 
 
@@ -153,3 +154,11 @@ def get_cache_invalidation_poller() -> CacheInvalidationPoller | None:
 def set_cache_invalidation_poller(poller: CacheInvalidationPoller) -> None:
     global _poller
     _poller = poller
+
+
+async def bump_cache_invalidation(namespace: str) -> None:
+    """Best-effort version bump; a no-op before the lifespan poller exists."""
+    poller = _poller
+    if poller is None:
+        return
+    await poller.bump(namespace)
