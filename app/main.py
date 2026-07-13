@@ -151,6 +151,13 @@ async def lifespan(app: FastAPI):
     bridge_durable_schema_ready = await _ensure_bridge_durable_schema_ready(settings)
     if bridge_durable_schema_ready:
         startup_module.mark_bridge_durable_schema_ready()
+    if settings.model_registry_enabled:
+        from app.core.openai.model_registry_store import reconcile_model_registry_from_store
+
+        # Warm the in-memory registry from the persisted snapshot before any
+        # scheduler starts so a restarted replica serves the refreshed catalog
+        # instead of the bootstrap floor. Never fails startup.
+        await reconcile_model_registry_from_store()
     usage_scheduler = build_usage_refresh_scheduler()
     api_key_limit_reset_scheduler = build_api_key_limit_reset_scheduler()
     model_scheduler = build_model_refresh_scheduler()
@@ -252,6 +259,7 @@ async def lifespan(app: FastAPI):
     from app.core.cache.invalidation import (
         NAMESPACE_API_KEY,
         NAMESPACE_FIREWALL,
+        NAMESPACE_MODEL_REGISTRY,
         CacheInvalidationPoller,
         set_cache_invalidation_poller,
     )
@@ -260,6 +268,10 @@ async def lifespan(app: FastAPI):
     cache_poller = CacheInvalidationPoller(SessionLocal)
     cache_poller.on_invalidation(NAMESPACE_API_KEY, get_api_key_cache().clear)
     cache_poller.on_invalidation(NAMESPACE_FIREWALL, get_firewall_ip_cache().invalidate_all)
+    if settings.model_registry_enabled:
+        from app.core.openai.model_registry_store import reconcile_model_registry_from_store
+
+        cache_poller.on_invalidation(NAMESPACE_MODEL_REGISTRY, reconcile_model_registry_from_store)
     set_cache_invalidation_poller(cache_poller)
     await cache_poller.start()
 
