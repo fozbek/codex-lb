@@ -326,6 +326,9 @@ async def lifespan(app: FastAPI):
             metrics_server.should_exit = True
 
         await cache_poller.stop()
+        # Symmetric with startup: bump_cache_invalidation is a no-op outside
+        # the poller's lifetime instead of writing through a stopped poller.
+        set_cache_invalidation_poller(None)
         await quota_planner_scheduler.stop()
         await auth_guardian_scheduler.stop()
         await automations_scheduler.stop()
