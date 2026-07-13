@@ -84,6 +84,93 @@ def test_get_pricing_for_model_gpt_5_4_nano_alias():
     assert price.output_per_1m == 1.25
 
 
+@pytest.mark.parametrize(
+    ("requested_model", "canonical_model", "standard_rates", "flex_rates", "priority_rates", "long_rates"),
+    [
+        (
+            "gpt-5.6-sol-2026-07-13",
+            "gpt-5.6-sol",
+            (5.0, 0.5, 30.0),
+            (2.5, 0.25, 15.0),
+            (10.0, 1.0, 60.0),
+            (10.0, 1.0, 45.0),
+        ),
+        (
+            "gpt-5.6-terra-xhigh-fast",
+            "gpt-5.6-terra",
+            (2.5, 0.25, 15.0),
+            (1.25, 0.125, 7.5),
+            (5.0, 0.5, 30.0),
+            (5.0, 0.5, 22.5),
+        ),
+        (
+            "gpt-5.6-luna-low",
+            "gpt-5.6-luna",
+            (1.0, 0.1, 6.0),
+            (0.5, 0.05, 3.0),
+            (2.0, 0.2, 12.0),
+            (2.0, 0.2, 9.0),
+        ),
+    ],
+)
+def test_get_pricing_for_gpt_5_6_aliases_and_rates(
+    requested_model: str,
+    canonical_model: str,
+    standard_rates: tuple[float, float, float],
+    flex_rates: tuple[float, float, float],
+    priority_rates: tuple[float, float, float],
+    long_rates: tuple[float, float, float],
+) -> None:
+    result = get_pricing_for_model(requested_model, DEFAULT_PRICING_MODELS, DEFAULT_MODEL_ALIASES)
+
+    assert result is not None
+    model, price = result
+    assert model == canonical_model
+    assert (price.input_per_1m, price.cached_input_per_1m, price.output_per_1m) == standard_rates
+    assert (price.flex_input_per_1m, price.flex_cached_input_per_1m, price.flex_output_per_1m) == flex_rates
+    assert (
+        price.priority_input_per_1m,
+        price.priority_cached_input_per_1m,
+        price.priority_output_per_1m,
+    ) == priority_rates
+    assert price.long_context_threshold_tokens == 272_000
+    assert (
+        price.long_context_input_per_1m,
+        price.long_context_cached_input_per_1m,
+        price.long_context_output_per_1m,
+    ) == long_rates
+
+
+@pytest.mark.parametrize(
+    ("model", "service_tier", "expected_cost"),
+    [
+        ("gpt-5.6-sol", None, 7.05),
+        ("gpt-5.6-terra", None, 3.525),
+        ("gpt-5.6-luna", None, 1.41),
+        ("gpt-5.6-sol", "flex", 3.525),
+        ("gpt-5.6-terra", "flex", 1.7625),
+        ("gpt-5.6-luna", "flex", 0.705),
+        ("gpt-5.6-sol", "priority", 8.55),
+        ("gpt-5.6-terra", "priority", 4.275),
+        ("gpt-5.6-luna", "priority", 1.71),
+    ],
+)
+def test_calculate_cost_from_usage_gpt_5_6_long_context_and_tiers(
+    model: str,
+    service_tier: str | None,
+    expected_cost: float,
+) -> None:
+    usage = UsageTokens(
+        input_tokens=300_000.0,
+        output_tokens=100_000.0,
+        cached_input_tokens=50_000.0,
+    )
+
+    cost = calculate_cost_from_usage(usage, DEFAULT_PRICING_MODELS[model], service_tier=service_tier)
+
+    assert cost == pytest.approx(expected_cost)
+
+
 def test_get_pricing_for_model_gpt_5_2_codex_alias():
     result = get_pricing_for_model("gpt-5.2-codex-2026-03-17", DEFAULT_PRICING_MODELS, DEFAULT_MODEL_ALIASES)
     assert result is not None

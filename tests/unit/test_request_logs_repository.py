@@ -66,6 +66,30 @@ async def test_add_log_persists_request_kind(db_setup) -> None:
 
 
 @pytest.mark.asyncio
+async def test_add_log_prices_qualified_gpt_5_6_model_at_priority_rates(db_setup) -> None:
+    del db_setup
+    async with SessionLocal() as session:
+        repo = RequestLogsRepository(session)
+
+        saved = await repo.add_log(
+            account_id=None,
+            request_id="req_gpt_5_6_priority",
+            model="gpt-5.6-sol-xhigh-fast",
+            service_tier="priority",
+            input_tokens=1_000_000,
+            cached_input_tokens=100_000,
+            output_tokens=1_000_000,
+            latency_ms=1,
+            status="success",
+            error_code=None,
+        )
+
+        persisted = await session.scalar(select(RequestLog).where(RequestLog.id == saved.id))
+        assert persisted is not None
+        assert persisted.cost_usd == pytest.approx(69.1)
+
+
+@pytest.mark.asyncio
 async def test_add_log_does_not_recalculate_unpriced_model_source_cost(db_setup) -> None:
     del db_setup
     async with SessionLocal() as session:
