@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 NAMESPACE_API_KEY = "api_key"
 NAMESPACE_FIREWALL = "firewall"
 NAMESPACE_MODEL_REGISTRY = "model_registry"
-type InvalidationCallback = Callable[[], None | Awaitable[None]]
+# Callback return values are ignored; awaitables are awaited for their side
+# effects only, so callbacks may return a status (e.g. bool) for other callers.
+type InvalidationCallback = Callable[[], object | Awaitable[object]]
 
 
 class CacheInvalidationPoller:
